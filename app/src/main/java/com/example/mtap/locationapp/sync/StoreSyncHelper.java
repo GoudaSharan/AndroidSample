@@ -14,13 +14,9 @@ public class StoreSyncHelper implements ISyncHelper {
     public void performSync(Context context, ContentResolver contentResolver,
                             SyncResult syncResult, Bundle extras) {
 
-
         Cursor cursor=contentResolver.query(LocalStoreContract.LocationStore.CONTENT_URI,
                 Location.PROJECTION,
                 null,null,null);
-
-
-
 
     }
 }

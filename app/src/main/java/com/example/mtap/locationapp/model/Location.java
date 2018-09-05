@@ -1,9 +1,26 @@
 package com.example.mtap.locationapp.model;
 
+import android.arch.persistence.room.ColumnInfo;
+import android.arch.persistence.room.Entity;
+import android.arch.persistence.room.PrimaryKey;
 import android.database.Cursor;
+import android.support.annotation.NonNull;
 
+@Entity(tableName = "location")
 public class Location {
+    public int getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(int locationId) {
+        this.locationId = locationId;
+    }
+
+    @PrimaryKey(autoGenerate = true)
+    private int locationId;
+    @ColumnInfo(name = "lat")
     String lat;
+    @ColumnInfo(name = "lng")
     String lng;
 
    /* public Location(String lat, String lng) {

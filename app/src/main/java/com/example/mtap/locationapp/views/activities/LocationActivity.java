@@ -3,6 +3,8 @@ package com.example.mtap.locationapp.views.activities;
 import android.Manifest;
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.arch.lifecycle.Observer;
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -10,42 +12,34 @@ import android.content.DialogInterface;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.database.ContentObserver;
-import android.database.Cursor;
 import android.location.Location;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.LoaderManager;
 import android.support.v4.content.ContextCompat;
-import android.support.v4.content.CursorLoader;
-import android.support.v4.content.Loader;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
-import android.view.View;
-import android.widget.Toast;
+import android.view.LayoutInflater;
 
 import com.example.mtap.locationapp.Locations.ILocationsListener;
-import com.example.mtap.locationapp.Locations.LocationsPresenter;
 import com.example.mtap.locationapp.Locations.SafetraxLocations;
-import com.example.mtap.locationapp.MainActivity;
 import com.example.mtap.locationapp.R;
 import com.example.mtap.locationapp.adapter.LocationAdapter;
-import com.example.mtap.locationapp.database.DatabaseHelper;
-import com.example.mtap.locationapp.interfaces.IRefreshLocationListListener;
+import com.example.mtap.locationapp.application.LocationApp;
+import com.example.mtap.locationapp.dao.LocationDAO;
+import com.example.mtap.locationapp.database.LocationDB;
+import com.example.mtap.locationapp.jobs.LocationWorker;
+import com.example.mtap.locationapp.model.LocationViewModel;
 import com.example.mtap.locationapp.provider.LocalStoreContract;
-import com.example.mtap.locationapp.provider.LocationsProvider;
-import com.example.mtap.locationapp.provider.StoreProvider;
-import com.example.mtap.locationapp.sync.StoreSyncAdapter;
 import com.google.android.gms.common.api.ResolvableApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -55,15 +49,30 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResponse;
 import com.google.android.gms.location.SettingsClient;
-import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import androidx.work.BackoffPolicy;
+import androidx.work.Worker;
 
 public class LocationActivity extends AppCompatActivity implements ILocationsListener{
+    // Constants
+    // The authority for the sync adapter's content provider
+    public static final String AUTHORITY = "com.example.mtap.locationapp.localstore";
+    // An account type, in the form of a domain name
+    public static final String ACCOUNT_TYPE = "com.example.mtap.locationapp.localstore.account";
+    // The account name
+
+    public static final long SYNC_INTERVAL_IN_MINUTES = 1L;
+
+    public static final String ACCOUNT = "dummyaccount";
+
     private FusedLocationProviderClient mFusedLocationClient;
     private LocationRequest mLocationRequest;
     private long UPDATE_INTERVAL = 10 * 1000;  /* 10 secs */
@@ -78,13 +87,6 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
     private LocationAdapter mAdapter;
     private int LOADER_ID = 1;
     private SafetraxLocations mSafetraxLocations;
-    // Constants
-    // The authority for the sync adapter's content provider
-    public static final String AUTHORITY = "com.example.mtap.locationapp.localstore";
-    // An account type, in the form of a domain name
-    public static final String ACCOUNT_TYPE = "com.example.mtap.locationapp.localstore.account";
-    // The account name
-    public static final String ACCOUNT = "dummyaccount";
     // Instance fields
     Account mAccount;
     // A content resolver for accessing the provider
@@ -108,7 +110,7 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
 
         mSafetraxLocations=new SafetraxLocations(this,this);
 
-        addAccount();
+        //addAccount();
 
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 
@@ -134,18 +136,39 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
             addAccount();
         }
 
-        /*DatabaseHelper db = new DatabaseHelper(this);
-        locationList = db.getAllLocations();
-        */
-        mSafetraxLocations.loadLocations();
-        // setAdapter();
+       // mSafetraxLocations.loadLocations();
+        RecyclerView.LayoutManager mLayoutManager = new LinearLayoutManager
+            (getApplicationContext());
+        recyclerView.setLayoutManager(mLayoutManager);
+        recyclerView.setItemAnimator(new DefaultItemAnimator());
 
-    //    getSupportLoaderManager().initLoader(LOADER_ID, null, this);
+        mAdapter = new LocationAdapter(new ArrayList<com.example.mtap.locationapp.model.Location>()
+        , null);
+        recyclerView.setAdapter(mAdapter);
 
+
+
+        LocationWorker locationWorker= LocationApp.getWorker();
+
+        locationWorker.setPeriodicInterval(SYNC_INTERVAL_IN_MINUTES,
+            TimeUnit.MINUTES);
+        locationWorker.setPeriodicBackOffCriteria(BackoffPolicy.LINEAR,
+            5, TimeUnit.MINUTES);
+        locationWorker.createWorkRequest(LocationWorker.PERIODIC_REQUEST);
+
+
+        LocationViewModel locationViewModel = ViewModelProviders.of(this).get(LocationViewModel.class);
+        locationViewModel.getLocations().observe(this, new Observer<List<com.example.mtap.locationapp.model
+            .Location>>() {
+            @Override public void onChanged(@Nullable List<com.example.mtap.
+                locationapp.model.Location> locations) {
+                if (locations == null) return;
+                mAdapter.swapList(locations);
+            }
+        });
     }
 
     private void addAccount() {
-
         // Create the dummy account
         mAccount = CreateSyncAccount(this);
 
@@ -153,14 +176,14 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
          * Create a content observer object.
          * Its code does not mutate the provider, so set
          * selfChange to "false"
-         */
+         *//*
         LocationObserver observer = new LocationObserver(null);
-        /*
+        *//*
          * Register the observer for the data table. The table's path
          * and any of its subpaths trigger the observer.
-         */
+         *//*
         mResolver.registerContentObserver(LocalStoreContract.BASE_CONTENT_URI,
-                true, observer);
+                true, observer);*/
 
     }
 
@@ -198,66 +221,6 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
         }
     }
 
-
-    public class LocationObserver extends ContentObserver {
-        // The account name
-        public static final String ACCOUNT = "dummyaccount";
-        // The authority for the sync adapter's content provider
-        public static final String AUTHORITY = "com.example.mtap.locationapp.localstore";
-        public LocationObserver(android.os.Handler handler){
-            super(handler);
-        }
-
-        /*
-         * Define a method that's called when data in the
-         * observed content provider changes.
-         * This method signature is provided for compatibility with
-         * older platforms.
-         */
-        @Override
-        public void onChange(boolean selfChange) {
-            /*
-             * Invoke the method signature available as of
-             * Android platform version 4.1, with a null URI.
-             */
-            onChange(selfChange, null);
-        }
-        /*
-         * Define a method that's called when data in the
-         * observed content provider changes.
-         */
-        @Override
-        public void onChange(boolean selfChange, Uri changeUri) {
-            /*
-             * Ask the framework to run your sync adapter.
-             * To maintain backward compatibility, assume that
-             * changeUri is null.
-             */
-
-            StoreSyncAdapter storeSyncAdapter=new StoreSyncAdapter(LocationActivity.this,
-                    true);
-            storeSyncAdapter.onPerformSync(mAccount,null,AUTHORITY,
-                    null,null);
-
-            ContentResolver.requestSync(mAccount, AUTHORITY, null);
-
-        }
-
-    }
-
-    private void setAdapter() {
-
-        if (locationList != null ) {
-            mAdapter = new LocationAdapter(locationList,null);
-
-            RecyclerView.LayoutManager mLayoutManager = new LinearLayoutManager
-                    (getApplicationContext());
-            recyclerView.setLayoutManager(mLayoutManager);
-            recyclerView.setItemAnimator(new DefaultItemAnimator());
-            recyclerView.setAdapter(mAdapter);
-        }
-    }
-
     private void initializeLocation() {
         initializeFusedLocation();
         initializeLocationRequest();
@@ -278,7 +241,7 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
                     // Update UI with location data
                     // ...
 
-                    onLocationChanged(location);
+                  //  onLocationChanged(location);
                 }
             }
         };
@@ -335,7 +298,7 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
                             // Got last known location. In some rare situations this can be null.
                             if (location != null) {
                                 // Logic to handle location object
-                                onLocationChanged(location);
+                              //  onLocationChanged(location);
                             }
                         }
                     });
@@ -475,11 +438,20 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
 
         location1.setLat(lat);
         location1.setLng(lng);
-        ContentValues contentValues=new ContentValues();
+
+        new PopulateDbAsync(LocationDB.get(this)).execute(location1);
+
+       /* LocationDAO locationDAO = LocationDB.get(this).locationDAO();
+        if (locationDAO == null) return;
+        locationDAO.insert(location1);*/
+
+
+      /*  ContentValues contentValues=new ContentValues();
         contentValues.put(com.example.mtap.locationapp.model.Location.COLUMN_LAT,lat);
         contentValues.put(com.example.mtap.locationapp.model.Location.COLUMN_LNG,lng);
 
-      Uri uri = getContentResolver().insert(LocalStoreContract.LocationStore.CONTENT_URI,contentValues);
+      Uri uri = getContentResolver().insert(LocalStoreContract.LocationStore.CONTENT_URI,
+          contentValues);*/
 
         /*DatabaseHelper db = new DatabaseHelper(LocationActivity.this);
         long check = db.insertLocation(location1);
@@ -536,5 +508,25 @@ public class LocationActivity extends AppCompatActivity implements ILocationsLis
             recyclerView.notifyAll();
         }
 
+    }
+
+
+    private static class PopulateDbAsync extends AsyncTask<com.example.
+        mtap.locationapp.model.Location, Void, Void> {
+
+        private final LocationDAO mDao;
+
+        PopulateDbAsync(LocationDB db) {
+            mDao = db.locationDAO();
+        }
+
+
+        @Override protected Void doInBackground(com.example.mtap.
+                                                    locationapp.model.Location... locations)
+        {
+          //  mDao.deleteAll();
+            mDao.insert(locations[0]);
+            return null;
+        }
     }
 }

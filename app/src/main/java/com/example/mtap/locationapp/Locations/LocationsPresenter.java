@@ -2,6 +2,7 @@ package com.example.mtap.locationapp.Locations;
 
 import android.content.Context;
 import android.database.Cursor;
+import android.provider.BaseColumns;
 import android.support.v4.app.LoaderManager;
 
 import com.example.mtap.locationapp.framework.AbstractInfoPresenter;
@@ -11,10 +12,8 @@ import com.example.mtap.locationapp.model.Location;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LocationsPresenter extends AbstractInfoPresenter<List<Location>> {
-
+public class LocationsPresenter extends AbstractInfoPresenter<List<Location>> implements BaseColumns{
     private AbstractLoader abstractLoader;
-
     public LocationsPresenter(Context context, LoaderManager loaderManager,
                                  InfoView<List<Location>>
                                          infoView) {
@@ -37,6 +36,9 @@ public class LocationsPresenter extends AbstractInfoPresenter<List<Location>> {
 
     @Override
     public void loadData() {
-        abstractLoader.requestor().loadRequest(AbstractLoader.LOCATION_DATA);
+      //  abstractLoader.requestor().loadRequest(AbstractLoader.LOCATION_DATA);
+
+      String sort = _ID + " DESC";
+       abstractLoader.requestor().sortOrder(sort).loadRequest(AbstractLoader.LOCATION_DATA);
     }
 }

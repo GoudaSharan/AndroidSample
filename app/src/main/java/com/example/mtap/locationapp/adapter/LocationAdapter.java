@@ -39,7 +39,7 @@ public class LocationAdapter extends RecyclerView.Adapter<LocationAdapter.MyView
         return new MyViewHolder(itemView);
     }
 
-    public Cursor swapCursor(Cursor cursor) {
+    /*public Cursor swapCursor(Cursor cursor) {
         if (dataCursor == cursor) {
             return null;
         }
@@ -49,7 +49,7 @@ public class LocationAdapter extends RecyclerView.Adapter<LocationAdapter.MyView
             this.notifyDataSetChanged();
         }
         return oldCursor;
-    }
+    }*/
 
 
     @Override
@@ -63,5 +63,10 @@ public class LocationAdapter extends RecyclerView.Adapter<LocationAdapter.MyView
     @Override
     public int getItemCount() {
         return locationsList.size();
+    }
+
+    public void swapList(List<Location> locations) {
+        this.locationsList = locations;
+        notifyDataSetChanged();
     }
 }

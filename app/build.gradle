@@ -45,4 +45,19 @@ dependencies {
     // RecyclerView
     implementation 'com.android.support:recyclerview-v7:27.0.0'
     implementation 'com.android.support:multidex:1.0.3'
+
+    def room_version = "1.1.1"
+    implementation "android.arch.persistence.room:runtime:$room_version"
+    annotationProcessor "android.arch.persistence.room:compiler:$room_version"
+    testImplementation "android.arch.persistence.room:testing:$room_version"
+    def archLifecycleVersion = "1.1.1"
+    implementation "android.arch.lifecycle:extensions:$archLifecycleVersion"
+    annotationProcessor "android.arch.lifecycle:compiler:$archLifecycleVersion"
+    def work_version = "1.0.0-alpha06"
+    implementation "android.arch.work:work-runtime:$work_version"
+    // use -ktx for Kotlin
+    // optional - Firebase JobDispatcher support
+    implementation "android.arch.work:work-firebase:$work_version"
+    // optional - Test helpers
+    androidTestImplementation "android.arch.work:work-testing:$work_version"
 }

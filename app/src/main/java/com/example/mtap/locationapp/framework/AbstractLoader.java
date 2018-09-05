@@ -40,9 +40,13 @@ public abstract class AbstractLoader implements LoaderManager.LoaderCallbacks<Cu
     public Loader<Cursor> onCreateLoader(int id, Bundle args) {
         switch (id) {
             case LOCATION_DATA:
+
+                CursorRequest cursorRequest=argsToRequest(args);
                 return new CursorLoader(context,
                         LocalStoreContract.LocationStore.CONTENT_URI,
-                        Location.PROJECTION, null, null, null);
+                        Location.PROJECTION, null, null,
+                        cursorRequest.sortOrder
+                        );
             default:
                 return null;
         }
